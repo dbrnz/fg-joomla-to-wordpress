@@ -69,7 +69,7 @@ class FG_Joomla_to_WordPress {
 	public function __construct() {
 
 		$this->plugin_name = 'fg-joomla-to-wordpress';
-		$this->version = '2.7.4';
+		$this->version = '3.22.0';
 
 		$this->load_dependencies();
 		$this->set_locale();
@@ -124,6 +124,7 @@ class FG_Joomla_to_WordPress {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-fg-joomla-to-wordpress-compatibility.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-fg-joomla-to-wordpress-modules-check.php';
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-fg-joomla-to-wordpress-weblinks.php';
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/class-fg-joomla-to-wordpress-progressbar.php';
 
 		/**
 		 * The class responsible for defining all actions that occur in the public-facing
@@ -162,10 +163,13 @@ class FG_Joomla_to_WordPress {
 	 */
 	private function define_admin_hooks() {
 
+		// Add links to the plugin page
+		$this->loader->add_filter( 'plugin_action_links_' . $this->plugin_name . '/' . $this->plugin_name . '.php', $this, 'plugin_action_links' );
+		
 		/**
 		 * The plugin is hooked to the WordPress importer
 		 */
-		if ( !defined('WP_LOAD_IMPORTERS') ) {
+		if ( !defined('WP_LOAD_IMPORTERS') && !defined('DOING_AJAX') ) {
 			return;
 		}
 
@@ -176,6 +180,8 @@ class FG_Joomla_to_WordPress {
 		$this->loader->add_action( 'fgj2wp_post_test_database_connection', $plugin_admin, 'get_joomla_info', 9 );
 		$this->loader->add_action( 'fgj2wp_pre_import_check', $plugin_admin, 'test_joomla_1_0' );
 		$this->loader->add_action( 'load-importer-fgj2wp', $plugin_admin, 'add_help_tab', 20 );
+		$this->loader->add_action( 'admin_footer', $plugin_admin, 'display_notices', 20 );
+		$this->loader->add_action( 'wp_ajax_fgj2wp_import', $plugin_admin, 'ajax_importer' );
 		
 		/*
 		 * Modules checker
@@ -189,10 +195,21 @@ class FG_Joomla_to_WordPress {
 		$plugin_weblinks = new FG_Joomla_to_WordPress_Weblinks( $plugin_admin );
 		$this->loader->add_action( 'fgj2wp_post_empty_database', $plugin_weblinks, 'empty_links' );
 		$this->loader->add_action( 'fgj2wp_post_import', $plugin_weblinks, 'import_links' );
-		$this->loader->add_action( 'fgj2wp_post_remove_category_prefix', $plugin_weblinks, 'remove_category_prefix' );
-		$this->loader->add_action( 'fgj2wp_import_notices', $plugin_weblinks, 'display_links_count' );
-		$this->loader->add_action( 'fgj2wp_pre_display_admin_page', $plugin_weblinks, 'process_admin_page', 11, 1 );
+		$this->loader->add_filter( 'fgj2wp_get_database_info', $plugin_weblinks, 'get_database_info' );
 		
+	}
+
+	/**
+	 * Customize the links on the plugins list page
+	 *
+	 * @param array $links Links
+	 * @return array Links
+	 */
+	public function plugin_action_links($links) {
+		// Add the import link
+		$import_link = '<a href="admin.php?import=fgj2wp">'. __('Import', $this->plugin_name) . '</a>';
+		array_unshift($links, $import_link);
+		return $links;
 	}
 
 	/**
